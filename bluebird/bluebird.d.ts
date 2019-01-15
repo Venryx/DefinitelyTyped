@@ -16,6 +16,27 @@
 
 // TODO verify support to have no return statement in handlers to get a Promise<void> (more overloads?)
 
+// Note: The types below are needed to declare the (complex) promisifyAll function.
+type NeverMatch = {PROP_NAME_THAT_IS_NEVER_MATCHED: never};
+type Callback = (error, result)=>void;
+type NotCallback<T> = T extends Callback ? NeverMatch : T;
+type WithCallbackFunctionsPromisified<T> = {
+	[P in keyof T]:
+		// Any functions where all the parameters are non-callbacks, we just return the type of that property unchanged. (fixes issue with typescript imagining an extra callback parameter when there is none, to fit the next overload)
+		T[P] extends (...args: NotCallback<infer ParametersUnion>[])=>void ? T[P] :
+
+		// Else, see if the parameters match one of the signatures below, where the last parameter is a callback function. If there's a match, return the promisified version of that signature.
+		T[P] extends (callback: (error, result: infer CallbackReturnType)=>void)=>void ? ()=>Promise<CallbackReturnType> :
+		T[P] extends (arg1: infer P1, callback: (error, result: infer CallbackReturnType)=>void)=>void ? (arg1: P1)=>Promise<CallbackReturnType> :
+		T[P] extends (arg1: infer P1, arg2: infer P2, callback: (error, result: infer CallbackReturnType)=>void)=>void ? (arg1: P1, arg2: P2)=>Promise<CallbackReturnType> :
+		T[P] extends (arg1: infer P1, arg2: infer P2, arg3: infer P3, callback: (error, result: infer CallbackReturnType)=>void)=>void ? (arg1: P1, arg2: P2, arg3: P3)=>Promise<CallbackReturnType> :
+		T[P] extends (arg1: infer P1, arg2: infer P2, arg3: infer P3, arg4: infer P4, callback: (error, result: infer CallbackReturnType)=>void)=>void ? (arg1: P1, arg2: P2, arg3: P3, arg4: P4)=>Promise<CallbackReturnType> :
+		T[P] extends (arg1: infer P1, arg2: infer P2, arg3: infer P3, arg4: infer P4, arg5: infer P5, callback: (error, result: infer CallbackReturnType)=>void)=>void ? (arg1: P1, arg2: P2, arg3: P3, arg4: P4, arg5: P5)=>Promise<CallbackReturnType> :
+
+		// Else, return the type of the property unchanged.
+		T[P];
+};
+
 declare class Promise<R> implements Promise.Thenable<R>, Promise.Inspection<R> {
 	/**
 	 * Create a new promise. The passed in function will receive functions `resolve` and `reject` as its arguments which can be called to seal the fate of the created promise.
@@ -415,8 +436,7 @@ declare class Promise<R> implements Promise.Thenable<R>, Promise.Inspection<R> {
 	 *
 	 * Note that the original methods on the object are not overwritten but new methods are created with the `Async`-postfix. For example, if you `promisifyAll()` the node.js `fs` object use `fs.statAsync()` to call the promisified `stat` method.
 	 */
-	// TODO how to model promisifyAll?
-	static promisifyAll(target: Object): Object;
+	static promisifyAll<T>(target: T): WithCallbackFunctionsPromisified<T>;
 
 	/**
 	 * Returns a function that can use `yield` to run asynchronous code synchronously. This feature requires the support of generators which are drafted in the next version of the language. Node version greater than `0.11.2` is required and needs to be executed with the `--harmony-generators` (or `--harmony`) command-line switch.
